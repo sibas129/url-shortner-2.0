@@ -1,29 +1,53 @@
 package build
 
 import (
-	"runtime"
+	"log"
+	"os"
+	"time"
+
+	"github.com/ilyakaznacheev/cleanenv"
 )
 
-// Info represents all available build & runtime environment information.
-type Info struct {
-	Version    string `json:"version,omitempty"`
-	CommitHash string `json:"commit_hash,omitempty"`
-	BuildDate  string `json:"build_date,omitempty"`
-	GoVersion  string `json:"go_version,omitempty"`
-	Os         string `json:"os,omitempty"`
-	Arch       string `json:"arch,omitempty"`
-	Compiler   string `json:"compiler,omitempty"`
+type Config struct {
+	Env          string `yaml:"env" env-default:"local"`
+	StoragePath  string `yaml:"storage_path" env-required:"true"`
+	HTTPServer   `yaml:"http_server"`
+	DBConnection `yaml:"db_connection"`
 }
 
-// NewInfo returns all available build information.
-func NewInfo() *Info {
-	return &Info{
-		Version:    Version,
-		CommitHash: CommitHash,
-		BuildDate:  BuildDate,
-		GoVersion:  runtime.Version(),
-		Os:         runtime.GOOS,
-		Arch:       runtime.GOARCH,
-		Compiler:   runtime.Compiler,
+type HTTPServer struct {
+	Address     string        `yaml:"address" env-default:"localhost:8080"`
+	Timeout     time.Duration `yaml:"timeout" env-default:"4s"`
+	IdleTimeout time.Duration `yaml:"idle_timeout" env-default:"60s"`
+	User        string        `yaml:"user" env-required:"true"`
+	Password    string        `yaml:"password" env-required:"true" env:"HTTP_SERVER_PASSWORD"`
+}
+
+type DBConnection struct {
+	Host     string `yaml:"host" env-required:"true"`
+	Port     string `yaml:"port" env-required:"true"`
+	User     string `yaml:"db_user" env-required:"true"`
+	Password string `yaml:"db_password" env-required:"true"`
+	DBName   string `yaml:"db_name" env-required:"true"`
+	SSLMode  string `yaml:"ssl_mode" env-required:"true"`
+}
+
+func MustLoad() *Config {
+	configPath := os.Getenv("CONFIG_PATH")
+	if configPath == "" {
+		log.Fatal("CONFIG_PATH is not set")
 	}
+
+	// check if file exists
+	if _, err := os.Stat(configPath); os.IsNotExist(err) {
+		log.Fatalf("config file does not exist: %s", configPath)
+	}
+
+	var cfg Config
+
+	if err := cleanenv.ReadConfig(configPath, &cfg); err != nil {
+		log.Fatalf("cannot read config: %s", err)
+	}
+
+	return &cfg
 }
